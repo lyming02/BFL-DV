@@ -56,23 +56,56 @@ theft_indices = np.random.choice(X.index, num_theft, replace=False)
 week_data = X.iloc[theft_indices, :336].values.astype(np.float32)
 week_tensor = torch.tensor(week_data)
 
-for i in range(len(theft_indices)):
-    # 1. 整体缩减
-    alpha = np.random.uniform(0.7, 0.9)  # 只缩减10%~30%
-    week_tensor[i] = week_tensor[i] * alpha
+# 定义FDI类型列表及对应概率（可根据需求调整概率分布）
+fdi_types = [
+    'FDI1',    # 全时段按比例缩减
+    'FDI2',        # 仅夜间时段（0~96）缩减
+    'FDI3', # 超过阈值的数值被截断
+    'FDI4',   # 整体减去随机常数，下限为0
+    'FDI5',   # 按比例缩放
+    'FDI6'     # 基于整体均值的比例缩放
+]
+fdi_probs = [0.2, 0.2, 0.2, 0.2, 0.1, 0.1]  # 定义概率分布
 
-    # 2. 只对部分时段缩减（如夜间0~96，白天96~240，晚间240~336）
-    if np.random.rand() < 0.5:
-        # 只缩减夜间
-        week_tensor[i, 0:96] *= np.random.uniform(0.5, 0.8)
-    else:
-        # 只缩减白天
-        week_tensor[i, 96:240] *= np.random.uniform(0.5, 0.8)
+fdi_types_list = []  # 记录每个实例的FDI类型
+
+for i in range(len(theft_indices)):
+    # 为每个实例随机选择FDI类型
+    selected_type = np.random.choice(fdi_types, p=fdi_probs)
+    fdi_types_list.append(selected_type)
+    if selected_type == 'FDI1':
+        # 整体缩减
+        alpha = np.random.uniform(0.2, 0.8)
+        week_tensor[i] = week_tensor[i] * alpha
+    elif selected_type == 'FDI5':
+        alphas = np.random.uniform(0.2, 0.8, size=week_tensor[i].shape)
+        week_tensor[i] *= alphas # 逐点相乘（每个点的α不同）
+    elif selected_type == 'FDI4':
+        # 部分时段缩减
+        if np.random.rand() < 0.5:
+            week_tensor[i, 0:96] *= np.random.uniform(0.2, 0.8)
+        else:
+            week_tensor[i, 96:240] *= np.random.uniform(0.2, 0.8)
+    elif selected_type == 'FDI2':
+        # 截断操作
+        mean = week_tensor[i].mean().item()
+        std = week_tensor[i].std().item()
+        threshold = mean + std
+        week_tensor[i] = torch.where(week_tensor[i] <= threshold, week_tensor[i], threshold)
+    elif selected_type == 'FDI3':
+        # 减去c并取max(·, 0)
+        c = np.random.uniform(0, week_tensor[i].max().item())
+        week_tensor[i] = torch.maximum(week_tensor[i] - c, torch.tensor(0.0))
+    elif selected_type == 'FDI6':
+        # 按均值比例缩放
+        mean = week_tensor[i].mean().item()
+        alpha_t = np.random.uniform(0.2, 0.8)
+        week_tensor[i] = torch.full_like(week_tensor[i], alpha_t * mean)
 
 # 写回DataFrame
 X.iloc[theft_indices, :336] = week_tensor.numpy()
 X.loc[theft_indices, 'label'] = 1
-X.loc[theft_indices, 'FDI_type'] = 'normal_level'
+X.loc[theft_indices, 'FDI_type'] = fdi_types_list
 
 # 保存
 X.to_csv(OUTPUT_CSV, index=False)
