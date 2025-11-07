@@ -49,7 +49,7 @@ X['week_index'] = [uw[1] for uw in user_week_index]
 X['label'] = 0  # 默认正常
 
 # 选取15%周实例注入窃电
-num_theft = int(0.85 * len(X))
+num_theft = int(0.15 * len(X))
 theft_indices = np.random.choice(X.index, num_theft, replace=False)
 
 # 生成"正常水平"窃电：整体缩减10%~30%，并只对部分时段（如夜间/白天）缩减
@@ -140,3 +140,4 @@ X.loc[theft_indices, 'FDI_type'] = fdi_types_list
 # 保存
 X.to_csv(OUTPUT_CSV, index=False)
 print(f'已生成窃电数据集：{OUTPUT_CSV}')
+
