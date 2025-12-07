@@ -285,30 +285,6 @@ elif FL_TYPE == 'Cluster':
             # FedAvg聚合簇内模型
 
             cluster_dict = cluster_client_models[0].state_dict()
-            if args.atk_mode['def1'] == 0:
-                for key in cluster_dict.keys():
-                    cluster_dict[key] = torch.stack([m.state_dict()[key].float() for m in cluster_client_models], 0).mean(0)
-            elif args.atk_mode['def1'] == 1:
-                # 1. 选委员会成员（只与上一轮不同即可）
-                last_committee = prev_committee_ids_per_cluster[cluster_id]
-                if epoch == 0 or last_committee is None:
-                    committee_ids = random.sample(cluster, args.m_num)
-                else:
-                    available_clients = [client for client in cluster if client not in last_committee]
-                    if len(available_clients) >= args.m_num:
-                        prev_reputations = prev_reputations_per_cluster[cluster_id]
-                        available_indices = [cluster.index(client) for client in available_clients]
-                        available_reputations = prev_reputations[available_indices]
-                        top_indices = np.argsort(available_reputations)[-args.m_num:]
-                        committee_ids = [available_clients[i] for i in top_indices]
-                    else:
-                        # 可用节点不足，允许重复
-                        prev_reputations = prev_reputations_per_cluster[cluster_id]
-                        top_indices = np.argsort(prev_reputations)[-args.m_num:]
-                        committee_ids = [cluster[i] for i in top_indices]
-                # 记录本轮委员会成员
-                prev_committee_ids_per_cluster[cluster_id] = committee_ids
-                print(f"  委员会成员: {committee_ids}")
 
                 # 2. 计算每个节点的声誉分
                 reputation_alpha = 0.5  # 历史权重
@@ -559,4 +535,5 @@ elif FL_TYPE == 'Cluster':
         df_results.to_csv(csv_path, index=False)
         print(f"已将本轮结果追加保存到 {csv_path}")
 else:
+
     raise ValueError(f"未知的FL_TYPE: {FL_TYPE}") 
